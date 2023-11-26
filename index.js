@@ -90,7 +90,7 @@ async function run() {
 
     app.get("/posts", async (req , res) => {
     
-        const query = req.query.tag
+        const query = req.query.tag 
         console.log(query);
         const result = await usersCollection.aggregate([
             {
@@ -132,12 +132,16 @@ async function run() {
         
         ]).toArray();
 
+        console.log(query);
+
         if(query){
             const data = result.filter(item => item.postInfo.tag === query)
             res.send(data)
+            console.log("hello");
         }
         else{
             res.send(result)
+            console.log("resul send without query");
         }
 
     })
@@ -145,7 +149,7 @@ async function run() {
 
     app.get("/post/:id" , async(req , res) =>{
         const id = req.params.id
-        console.log(id);
+        // console.log(id);
     
         
         const result = await usersCollection.aggregate([
@@ -184,30 +188,96 @@ async function run() {
         
         ]).toArray();
 
-        const newData = result.find(item => item.postInfo._id == "6561c16da26ac34c35710d0b")
+        const newData = result.find(item => item.postInfo._id == id)
         // console.log(newData);
 
         res.send(newData)
     })
 
-    // app.post("")
+
+    app.patch('/post/update/:id' ,async(req , res) =>{
+        const id = req.params.id
+        const updatePost = req.body
+        console.log(id ,updatePost)
+  
+  
+        const filter = { _id : new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            upVote : updatePost.upvote,
+            downVote : updatePost.downVote,
+            // downVote: updatePost.
+          },
+        };
+        console.log("upvote is " , updatePost.upvote);
+
+        const result = await postCollection.updateOne(filter, updateDoc, );
+        res.send(result)
+  
+  
+      })
+  
 
 
 
 // --------------------------comments-------------------
 
-app.get("/comment/:title", async (req , res) => {
+    app.get("/comment/:title", async (req , res) => {
 
-    const title = req.params.title
-    console.log( title);
+        const title = req.params.title
+        console.log( title);
 
-    
-    const query = {postTitle :  "Exploring Culinary Delights"}
-    
-    const cursor = commentCollection.find(query)
-    const result = await cursor.toArray()
-    res.send(result)
-})
+        
+        // const query = {postTitle :  title}
+        
+        // const cursor = commentCollection.find(query)
+        // const result = await cursor.toArray()
+
+
+        
+        const result = await usersCollection.aggregate([
+            
+            {
+            
+                $lookup: { 
+                    from: "comment",
+                    localField:  "email",
+                    foreignField: "email",
+                    as: "postInfo",
+                },
+            },
+            {
+                $unwind : "$postInfo" 
+
+            },        
+        
+
+            {
+                $project : {
+                    name : 1,
+                    imageUrl:1,
+                    email :1,
+                    postInfo:1
+                }
+            },
+        
+        ]).toArray();
+
+        const filteredResult = result.filter(item => item.postInfo.postTitle === title)
+        res.send(filteredResult)
+        // res.send(result)
+    })
+
+
+    app.post("/comments" , async(req , res) => {
+
+        const comment = req.body
+
+        const result = await commentCollection.insertOne(comment)
+        res.send(result)
+        // console.log(comment);
+        
+    })
 
 
 
