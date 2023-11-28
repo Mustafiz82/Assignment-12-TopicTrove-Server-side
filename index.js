@@ -60,13 +60,19 @@ async function run() {
 
 
 
-    app.get("/user" , async(req , res) => {
-        const cursor = usersCollection.find()
-        const result = await cursor.toArray()
+    app.get("/user/:email" , async(req , res) => {
+
+        const email = req.params.email
+
+        const query = {email : email}
+
+        const result =  await usersCollection.findOne(query)
+        
         res.send(result);
 
-        const problematicDocuments = result.filter(doc => !doc.postInfo || doc.postInfo.length === 0);
-        console.log("Problematic Documents:", problematicDocuments.map(doc => doc.authorEmail));
+        
+
+
         
     })
   
@@ -90,7 +96,7 @@ async function run() {
 
     app.get("/posts", async (req , res) => {
     
-        const query = req.query.tag 
+        const query = req.query
         console.log(query);
         const result = await usersCollection.aggregate([
             {
@@ -126,18 +132,24 @@ async function run() {
                     name : 1,
                     imageUrl:1,
                     popularity : 1,
-                    postInfo:1
+                    postInfo:1,
+                    email:1
                 }
             },
         
         ]).toArray();
 
-        console.log(query);
+        console.log("query" ,query);
 
-        if(query){
-            const data = result.filter(item => item.postInfo.tag === query)
+        if(query?.tag){
+            const data = result.filter(item => item.postInfo.tag === query.tag)
             res.send(data)
             console.log("hello");
+        }
+        else if(query.email){
+            const data = result.filter(item => item.email === query.email)
+            res.send(data)
+            console.log("result sent form emai lquer");
         }
         else{
             res.send(result)
@@ -149,8 +161,6 @@ async function run() {
 
     app.get("/post/:id" , async(req , res) =>{
         const id = req.params.id
-        // console.log(id);
-    
         
         const result = await usersCollection.aggregate([
             {
@@ -189,9 +199,9 @@ async function run() {
         ]).toArray();
 
         const newData = result.find(item => item.postInfo._id == id)
-        // console.log(newData);
 
         res.send(newData)
+
     })
 
 
@@ -216,6 +226,15 @@ async function run() {
   
   
       })
+
+    app.post("/posts" , async(req , res) => {
+
+        const postInfo = req.body
+
+        const result = await postCollection.insertOne(postInfo)
+        res.send(result)
+        console.log(postInfo);
+    })
   
 
 
@@ -277,6 +296,39 @@ async function run() {
         res.send(result)
         // console.log(comment);
         
+    })
+
+    app.put("/comment/:id", async (req , res) => {
+
+        const id = req.params.id
+
+        const updateComment = req.body
+
+        const filter = {_id : new ObjectId(id)}
+
+        const options ={ upsert: true };
+
+        const updateDoc = {
+            $set: {
+            reported : updateComment.report
+            },
+        };
+
+        // console.log("comment is ",id , updateComment);
+
+
+        const result =await commentCollection.updateOne(filter , updateDoc , options)
+        res.send(result)
+    })
+
+
+    app.delete("/comment/:id", async (req , res) => {
+
+        const id = req.params.id
+        const filter = {_id : new ObjectId(id)}
+
+        const result =await postCollection.deleteOne(filter)
+        res.send(result)
     })
 
 
