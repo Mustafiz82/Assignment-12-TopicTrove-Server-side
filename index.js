@@ -36,6 +36,7 @@ async function run() {
     const AnnounceMentCollection = database.collection("announcements");
     const postCollection = database.collection("post");
     const commentCollection = database.collection("comment");
+    const tagsCollection = database.collection("tags");
 
 
 
@@ -70,16 +71,45 @@ async function run() {
         
         res.send(result);
 
-        
-
 
         
     })
-  
+
+      
+    app.get("/users", async (req, res) => {
+      
+        const cursor = usersCollection.find();
+        const result = await cursor.toArray();
+        res.send(result);
+
+    });
+
+    
+    app.patch("/users/:id", async (req , res) => {
+
+        const id = req.params.id
 
 
+        console.log(id , "id");
+
+        const filter = {_id : new ObjectId(id)}
+
+        const options ={ upsert: true };
+
+        const updateDoc = {
+            $set: {
+            role : "admin"
+            },
+        };
+
+        // console.log("comment is ",id , updateComment);
 
 
+        const result =await usersCollection.updateOne(filter , updateDoc )
+        res.send(result)
+    })
+
+    
 
 // ----------------------anoouncement--------------------
 
@@ -87,6 +117,13 @@ async function run() {
         const cursor = AnnounceMentCollection.find()
         const result = await cursor.toArray()
         res.send(result)
+    })
+
+    app.post("/announcements" , async (req , res) => {
+        const data = req.body
+        console.log(data);
+        const resul = await AnnounceMentCollection.insertOne(data)
+        res.send(resul)
     })
 
 
@@ -235,7 +272,16 @@ async function run() {
         res.send(result)
         console.log(postInfo);
     })
-  
+    
+    app.delete("/post/:id", async (req , res) => {
+
+        const id = req.params.id
+        const filter = {_id : new ObjectId(id)}
+
+        const result =await postCollection.deleteOne(filter)
+        res.send(result)
+    })
+
 
 
 
@@ -322,12 +368,111 @@ async function run() {
     })
 
 
+   
     app.delete("/comment/:id", async (req , res) => {
 
         const id = req.params.id
         const filter = {_id : new ObjectId(id)}
 
-        const result =await postCollection.deleteOne(filter)
+        const result =await commentCollection.deleteOne(filter)
+        res.send(result)
+    })
+
+
+    app.get("/commentsReported" , async (req , res) => {
+
+        
+        const result = await usersCollection.aggregate([
+            
+            {
+            
+                $lookup: { 
+                    from: "comment",
+                    localField:  "email",
+                    foreignField: "email",
+                    as: "postInfo",
+                },
+            },
+            {
+                $unwind : "$postInfo" 
+
+            }, 
+
+            {
+                 $match:
+                    {
+                      "postInfo.reported": { $ne: null }
+                    }
+            },
+
+                    
+        
+
+            {
+                $project : {
+                    name : 1,
+                    imageUrl:1,
+                    email :1,
+                    postInfo:1
+                }
+            },
+        
+        ]).toArray();
+        const filteredResult = result.filter(item => item.postInfo.reported !== "undefined" )
+        res.send(filteredResult)
+
+    })
+
+    // -------------------adminState---------------
+
+    app.get("/adminState" ,async (req , res) => {
+
+        const postCount = await postCollection.estimatedDocumentCount()
+        const userCount = await usersCollection.estimatedDocumentCount()
+        const commemtCount = await commentCollection.estimatedDocumentCount()
+        console.log(postCount);
+
+        res.json({
+            postCount,
+            commemtCount,
+            userCount
+          });
+    })
+
+
+    // ----------------------tags-----------------------
+
+
+    app.post("/tags" , async (req , res) => {
+
+        const tag = (req.body)
+
+        console.log(tag);
+
+
+        const query ={ tag : tag.tag}
+
+        const searchTag = await tagsCollection.findOne(query)
+        // console.log(searchTag.length);
+        console.log(searchTag , "searchtag");
+
+        if(!searchTag){
+
+            const result = await tagsCollection.insertOne(tag)
+            res.send(result)
+        }
+        else {
+            res.send({messeage : "tag already in the collection"})
+        }
+
+
+    })
+
+
+    app.get("/tags" , async (req , res) => {
+
+        const result = await tagsCollection.find().toArray()
+
         res.send(result)
     })
 
