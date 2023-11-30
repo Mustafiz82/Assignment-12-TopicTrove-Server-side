@@ -220,8 +220,15 @@ const verifyAdmin = async (req, res, next) => {
 
 
     app.get("/posts", async (req , res) => {
+
+
     
         const query = req.query
+        const size = parseInt(req.query.size );
+        const page = parseInt(req.query.page  )
+
+        console.log(size , page , "size and page ");
+        const skip = page * size 
         console.log(query);
         const result = await usersCollection.aggregate([
             {
@@ -260,6 +267,12 @@ const verifyAdmin = async (req, res, next) => {
                     postInfo:1,
                     email:1
                 }
+            },
+            { 
+                $skip: skip 
+            },
+            {
+                 $limit: size 
             },
         
         ]).toArray();
@@ -586,7 +599,6 @@ const verifyAdmin = async (req, res, next) => {
 
 
     // -------------------jwt --------------------------
-    console.log("access token is",process.env.ACCESS_TOKEN_SECRET);
 
     app.post("/jwt", async (req, res) => {
 
@@ -700,6 +712,40 @@ app.get("/payment/:email", verifyToken, async (req, res) => {
     res.send(Payments);
 });
 
+
+
+
+
+// -----------------------pagination-------------
+
+
+
+
+app.get("/dataCount" , async (req , res) => {
+    const count = await postCollection.estimatedDocumentCount()
+    // const users = await usersCollection.estimatedDocumentCount()
+    // const count = await productCollection.estimatedDocumentCount()
+    console.log("api got hit");
+    res.send({count})
+})
+
+
+
+
+
+app.get("/paginatePost", async (req, res) => {
+    const size = parseInt(req.query.size);
+    const page = parseInt(req.query.page);
+
+
+    const result = await productCollection.find()
+    .skip(page * size)
+    .limit(size)
+    .toArray();
+    console.log("query of products is", req.query);
+
+    res.send(result);
+  });
 
 
 
