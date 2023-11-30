@@ -4,6 +4,8 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5144;
 require('dotenv').config()
+const jwt = require('jsonwebtoken');
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 
 app.use(cors());
@@ -37,12 +39,72 @@ async function run() {
     const postCollection = database.collection("post");
     const commentCollection = database.collection("comment");
     const tagsCollection = database.collection("tags");
+    const paymentCollection = database.collection("payment")
+
+// ----------------------middlewere-------------------------------------
 
 
+const verifyToken = (req, res, next) => {
+
+    console.log("inside middlewere", req.headers);
+
+
+    // headers is set in useaxiosSecure and in header token is in it
+
+
+    // if no token found set status
+    if (!req.headers.authorization) {
+        return res.status(401).send({ messege: "forbidden access" });
+    }
+
+
+    //splitting the string to get only token not "barear"  text
+    const token = req.headers.authorization.split(" ")[1];
+
+
+    // verifying is the token same or not
+    jwt.verify( token, process.env.ACCESS_TOKEN_SECRET,
+        function (err, decoded) {
+            if (err) {
+                return res
+                    .status(401)
+                    .send({ messege: "forbidden access" });
+            } else {
+                // set the decoded jwt information (token , email ) in decoded file
+                req.decoded = decoded;
+                next();
+            }
+        }
+    );
+};
+
+
+ 
+
+const verifyAdmin = async (req, res, next) => {
+    // getting email form decoded which is previously set in verifytoken middleware
+    // in every api where needed verifytoken must need to be  before verify admin
+
+
+    const email = req.decoded.email;
+    const query = { email: email };
+
+
+    const user = await usersCollection.findOne(query);
+
+
+    let admin = user?.role === "admin";
+
+
+    if (!admin) {
+        return res.status(403).send({ messege: "forbidden Access" });
+    }
+    next();
+};
 
 //----------------------- users---------------------------
 
-    app.post("/users", async (req, res) => {
+    app.post("/users" , async (req, res) => {
         const user = req.body;
         // console.log(user.email);
 
@@ -61,7 +123,7 @@ async function run() {
 
 
 
-    app.get("/user/:email" , async(req , res) => {
+    app.get("/user/:email" ,verifyToken , async(req , res) => {
 
         const email = req.params.email
 
@@ -76,7 +138,7 @@ async function run() {
     })
 
       
-    app.get("/users", async (req, res) => {
+    app.get("/users",verifyToken ,verifyAdmin , async (req, res) => {
       
         const cursor = usersCollection.find();
         const result = await cursor.toArray();
@@ -85,7 +147,33 @@ async function run() {
     });
 
     
-    app.patch("/users/:id", async (req , res) => {
+    app.patch("/users/membership/:email"  ,verifyToken ,async (req , res) => {
+
+        const email = req.params.email
+
+
+        console.log(email , "email");
+
+
+
+        const filter = {email :email}
+
+        const options ={ upsert: true };
+
+        const updateDoc = {
+            $set: {
+                Membership : "Member"
+            },
+        };
+
+        // console.log("comment is ",id , updateComment);
+
+
+        const result =await usersCollection.updateOne(filter , updateDoc )
+        res.send(result)
+    })
+    
+    app.patch("/users/:id"  ,verifyToken , verifyAdmin,async (req , res) => {
 
         const id = req.params.id
 
@@ -109,7 +197,7 @@ async function run() {
         res.send(result)
     })
 
-    
+ 
 
 // ----------------------anoouncement--------------------
 
@@ -241,7 +329,6 @@ async function run() {
 
     })
 
-
     app.patch('/post/update/:id' ,async(req , res) =>{
         const id = req.params.id
         const updatePost = req.body
@@ -273,7 +360,7 @@ async function run() {
         console.log(postInfo);
     })
     
-    app.delete("/post/:id", async (req , res) => {
+    app.delete("/post/:id", verifyToken ,async (req , res) => {
 
         const id = req.params.id
         const filter = {_id : new ObjectId(id)}
@@ -282,15 +369,27 @@ async function run() {
         res.send(result)
     })
 
+    app.get("/postcount/:email" , async (req , res ) => {
+
+        const email = req.params.email
+        console.log(email);
+        const query = {authorEmail : email}
+
+        const result = await postCollection.find(query).toArray()
+
+        console.log(result.length);
+        res.send({result : result.length})
+    })
+
 
 
 
 // --------------------------comments-------------------
 
-    app.get("/comment/:title", async (req , res) => {
+    app.get("/comment/:title"  ,async (req , res) => {
 
         const title = req.params.title
-        console.log( title);
+        // console.log( title);
 
         
         // const query = {postTitle :  title}
@@ -344,7 +443,7 @@ async function run() {
         
     })
 
-    app.put("/comment/:id", async (req , res) => {
+    app.put("/comment/:id",verifyToken, async (req , res) => {
 
         const id = req.params.id
 
@@ -369,7 +468,7 @@ async function run() {
 
 
    
-    app.delete("/comment/:id", async (req , res) => {
+    app.delete("/comment/:id", verifyToken ,verifyAdmin ,async (req , res) => {
 
         const id = req.params.id
         const filter = {_id : new ObjectId(id)}
@@ -379,7 +478,7 @@ async function run() {
     })
 
 
-    app.get("/commentsReported" , async (req , res) => {
+    app.get("/commentsReported" ,verifyToken ,verifyAdmin, async (req , res) => {
 
         
         const result = await usersCollection.aggregate([
@@ -423,15 +522,23 @@ async function run() {
 
     })
 
+
+    app.get("/comments" , async(req , res) => {
+
+        const announcmentCount = await AnnounceMentCollection.estimatedDocumentCount()
+        res.send({announcmentCount})
+    })
+
     // -------------------adminState---------------
 
-    app.get("/adminState" ,async (req , res) => {
+    app.get("/adminState" ,verifyToken ,verifyAdmin, async (req , res) => {
 
         const postCount = await postCollection.estimatedDocumentCount()
         const userCount = await usersCollection.estimatedDocumentCount()
         const commemtCount = await commentCollection.estimatedDocumentCount()
         console.log(postCount);
 
+        
         res.json({
             postCount,
             commemtCount,
@@ -443,7 +550,7 @@ async function run() {
     // ----------------------tags-----------------------
 
 
-    app.post("/tags" , async (req , res) => {
+    app.post("/tags",verifyToken , verifyAdmin , async (req , res) => {
 
         const tag = (req.body)
 
@@ -475,6 +582,124 @@ async function run() {
 
         res.send(result)
     })
+
+
+
+    // -------------------jwt --------------------------
+    console.log("access token is",process.env.ACCESS_TOKEN_SECRET);
+
+    app.post("/jwt", async (req, res) => {
+
+        const user = req.body;
+        
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+            expiresIn: "1h",
+        });
+
+        console.log( "toke is token" , token);
+        res.send({ token });
+    });
+
+
+
+    app.get("/users/admin/:email",  async (req, res) => {
+        const email = req.params.email;
+
+
+        // if (email !== req.decoded.email) {
+        //     return res
+        //         .status(401)
+        //         .send({ messege: "unauthoroized Access" });
+        // }
+
+
+        const query = { email: email };
+
+
+        const user = await usersCollection.findOne(query);
+
+
+        let admin = false;
+
+
+        if (user) {
+            admin = user?.role === "admin";
+        }
+
+
+        res.send({ admin });
+    });
+
+
+
+//    ----------------------------stripe payment------------
+
+
+app.post("/payment", async (req, res) => {
+    const payment = req.body;
+    const paymentResult = await paymentCollection.insertOne(payment);
+
+
+    // carefully delete id's from catt
+
+
+
+
+
+
+    console.log(payment);
+    res.send (paymentResult)
+});
+
+
+
+app.post("/create-payment-intent", async (req, res) => {
+    const { price } = req.body;
+    const amount = parseInt(price * 100);
+    console.log(amount);
+
+    console.log("price of cart is ", price);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+    });
+
+    console.log("payment intent", paymentIntent.client_secret);
+
+    res.send({
+        clientSecret: paymentIntent.client_secret,
+        // messege : "hello world"
+    });
+});
+
+
+
+
+app.get("/payment/:email", verifyToken, async (req, res) => {
+    const email = req.params.email;
+
+
+    console.log(email, "payment");
+
+
+    if (email !== req.decoded.email) {
+        return res
+            .status(401)
+            .send({ messege: "unauthoroized Access" });
+    }
+
+
+    const query = { email: email };
+
+
+    const Payments = await paymentCollection.find(query).toArray();
+
+
+    res.send(Payments);
+});
+
 
 
 
