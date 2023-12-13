@@ -123,7 +123,7 @@ const verifyAdmin = async (req, res, next) => {
 
 
 
-    app.get("/user/:email" ,verifyToken , async(req , res) => {
+    app.get("/user/:email"  , async(req , res) => {
 
         const email = req.params.email
 
@@ -163,6 +163,38 @@ const verifyAdmin = async (req, res, next) => {
         const updateDoc = {
             $set: {
                 Membership : "Member"
+            },
+        };
+
+        // console.log("comment is ",id , updateComment);
+
+
+        const result =await usersCollection.updateOne(filter , updateDoc )
+        res.send(result)
+    })
+    
+    app.patch("/users/updateProfile/:email"   ,async (req , res) => {
+
+        const email = req.params.email
+
+        const user = req.body
+
+        console.log(email , user , "email");
+
+
+
+        const filter = {email :email}
+
+        const options ={ upsert: true };
+
+
+
+        
+
+        const updateDoc = {
+            $set: {
+                imageUrl : user.imageUrl,
+                name : user.name
             },
         };
 
@@ -224,8 +256,10 @@ const verifyAdmin = async (req, res, next) => {
 
     
         const query = req.query
-        const size = parseInt(req.query.size );
-        const page = parseInt(req.query.page  )
+
+        console.log(query);
+        const size = parseInt(req.query.size  || 20);
+        const page = parseInt(req.query.page || 0 )
 
         console.log(size , page , "size and page ");
         const skip = page * size 
@@ -393,6 +427,10 @@ const verifyAdmin = async (req, res, next) => {
         console.log(result.length);
         res.send({result : result.length})
     })
+
+    
+
+    
 
 
 
@@ -614,32 +652,20 @@ const verifyAdmin = async (req, res, next) => {
 
 
 
-    app.get("/users/admin/:email",  async (req, res) => {
-        const email = req.params.email;
+    app.get("/admin/:email",  async (req, res) => {
 
+        
+        const email = req.params.email
 
-        // if (email !== req.decoded.email) {
-        //     return res
-        //         .status(401)
-        //         .send({ messege: "unauthoroized Access" });
-        // }
+        const query = {email : email}
+        console.log(email);
 
+        const result =  await usersCollection.findOne(query)
+        
+        res.send(result);
+        console.log(result);
 
-        const query = { email: email };
-
-
-        const user = await usersCollection.findOne(query);
-
-
-        let admin = false;
-
-
-        if (user) {
-            admin = user?.role === "admin";
-        }
-
-
-        res.send({ admin });
+        
     });
 
 
@@ -728,6 +754,9 @@ app.get("/dataCount" , async (req , res) => {
     console.log("api got hit");
     res.send({count})
 })
+
+
+
 
 
 
